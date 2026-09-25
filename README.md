@@ -25,6 +25,7 @@
    - Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`).
    - Select "Python: Select Interpreter".
    - Choose the Python version inside `.venv`.
+   - Now you can run things normally via VSCode (F5/ Ctrl F5/ Run tests) without even a python installation on your PC
 
 4. And you can also run the project from the terminal.
 
