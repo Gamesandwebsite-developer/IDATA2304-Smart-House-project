@@ -37,3 +37,9 @@
      ```bash
      uv run pytest
      ```
+
+References:
+1) https://dev.to/lifeportal20002010/mastering-uv-in-vs-code-the-ultra-fast-python-setup-guide-2n56
+2) https://pydevtools.com/handbook/how-to/how-to-configure-vs-code-for-a-uv-project/
+
+3) https://www.youtube.com/watch?v=AMdG7IjgSPM&t=398s
