@@ -1,4 +1,4 @@
-def helloWorld() -> None:
+def main() -> None:
     print("Hello from idata2304-smart-house-project!")
 
 
