@@ -7,7 +7,7 @@ from typing import Any, override
 
 
 class DeviceType(IntEnum):
-    # Sensors (0x000 - 0x0FF)
+    # Sensors 
     UNKNOWN_SENSOR = 0x000
     TEMPERATURE_SENSOR = 0x001
     LIGHT_SENSOR = 0x002
@@ -15,14 +15,14 @@ class DeviceType(IntEnum):
     MOTION_SENSOR = 0x004
     SMOKE_FLAME_DETECTOR = 0x005
 
-    # Actuators (0x100 - 0x1FF)
+    # Actuators 
     UNKNOWN_ACTUATOR = 0x100
     IRRIGATOR = 0x101
     FAN = 0x102
     HEATER = 0x103
     DOOR_LOCK = 0x104
 
-    # Control / System Nodes (0x200+)
+    # Control / System Nodes 
     CONTROL_PANEL = 0x200
     PHONE = 0x201
     SERVER = 0x202
