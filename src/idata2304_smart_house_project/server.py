@@ -1,34 +1,79 @@
-from typing import Dict
+import asyncio
+import struct
+from typing import Dict, Optional
 from .api import DeviceType, Packet
 from .sensor_node import SensorActuatorNode
-from .control_panel import ControlPanel
 
-
+#Central message broker router responsible for handling network node registry and packet routing.
 class IntermediateServer:
-    def __init__(self):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8081) -> None:
+        self.host = host
+        self.port = port
         self.nodes: Dict[str, SensorActuatorNode] = {}
-        self.clients: Dict[str, ControlPanel] = {}
+        self.clients: Dict[str, str] = {}  
+        self.server: Optional[asyncio.Server] = None
 
     def register_node(self, node: SensorActuatorNode) -> None:
         self.nodes[node.node_id] = node
 
-    def register_client(self, client: ControlPanel) -> None:
-        self.clients[client.user_id] = client
+    # Registers a client user identity.
+    def register_client(self, user_id: str) -> None:
+        self.clients[user_id] = user_id
+
+    # Starts the TCP server
+    async def start(self) -> None:
+        self.server = await asyncio.start_server(
+            self._handle_connection, self.host, self.port
+        )
+        print(f"[SERVER] Listening on {self.host}:{self.port}...")
+        async with self.server:
+            await self.server.serve_forever()
+
+    # Shuts down the TCP server.
+    async def stop(self) -> None:
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+            print("[SERVER] Stopped.")
+
+    #Handles framed socket communication for a connected client.
+    async def _handle_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        
+        addr = writer.get_extra_info("peername")
+        print(f"[SERVER] Client connected: {addr}")
+
+        try:
+            while True:
+                header = await reader.readexactly(4)
+                msg_length = struct.unpack("!I", header)[0]
+                raw_bytes = await reader.readexactly(msg_length)
+
+                response_bytes = self.route_message(raw_bytes)
+
+                # Send length header + payload back to client
+                response_length = struct.pack("!I", len(response_bytes))
+                writer.write(response_length + response_bytes)
+                await writer.drain()
+
+        except (asyncio.IncompleteReadError, ConnectionResetError):
+            print(f"[SERVER] Client disconnected: {addr}")
+        finally:
+            writer.close()
+            await writer.wait_closed()
+    
 
     def route_message(self, raw_bytes: bytes) -> bytes:
+        """Parses incoming JSON bytes, resolves target routes, and dispatches actions."""
         packet = Packet.decode(raw_bytes)
 
         if not packet.payload:
-            res = Packet(
-                device_id="server",
-                device_type=DeviceType.SERVER,
-                payload={"status": "error", "message": "Missing payload"},
-            )
-            return res.encode()
+            return self._error_response("Missing payload")
 
         action = packet.payload.get("action")
 
-         #Action: LIST_NODES (Does not target a single node)
+        # Action: LIST_NODES 
         if action == "LIST_NODES":
             nodes_info = {
                 node_id: {
@@ -38,77 +83,64 @@ class IntermediateServer:
                 }
                 for node_id, node in self.nodes.items()
             }
-            res = Packet(
-                device_id="server",
-                device_type=DeviceType.SERVER,
-                payload={"status": "success", "nodes": nodes_info},
-            )
-            return res.encode()
+            return self._success_response(payload={"status": "success", "nodes": nodes_info})
 
-        #For READ, WRITE, and UPDATE_SENSOR, validate target_id presence
+        # Target validation for node-specific actions (READ, WRITE, UPDATE_SENSOR)
         target_id = packet.payload.get("target_id")
-
         if target_id not in self.nodes:
-            res = Packet(
-                device_id="server",
-                device_type=DeviceType.SERVER,
-                payload={"status": "error", "message": f"Target node '{target_id}' not found"},
-            )
-            return res.encode()
+            return self._error_response(f"Target node '{target_id}' not found")
 
         target_node = self.nodes[target_id]
 
-        # Action: READ
+        # Action routing
         if action == "READ":
-            resource = packet.payload.get("resource")
+            resource = str(packet.payload.get("resource", ""))
             val = target_node.sensors.get(resource)
-            res = Packet(
-                device_id="server",
-                device_type=target_node.device_type,
+            return self._success_response(
                 payload={"status": "success", "resource": resource, "value": val},
+                device_type=target_node.device_type,
             )
-            return res.encode()
 
-        # Action: WRITE
         elif action == "WRITE":
             actuator = str(packet.payload.get("actuator", ""))
             state = str(packet.payload.get("state", ""))
-
             success = target_node.execute_command(actuator, state)
-            res = Packet(
-                device_id="server",
-                device_type=target_node.device_type,
+            return self._success_response(
                 payload={
                     "status": "success" if success else "failed",
                     "actuator": actuator,
                     "new_state": target_node.actuators.get(actuator),
                 },
+                device_type=target_node.device_type,
             )
-            return res.encode()
 
-        # Action: UPDATE_SENSOR
         elif action == "UPDATE_SENSOR":
             sensor_name = str(packet.payload.get("sensor", ""))
             value = float(packet.payload.get("value", 0.0))
-
             target_node.update_sensor(sensor_name, value)
-
-            res = Packet(
-                device_id="server",
-                device_type=DeviceType.SERVER,
+            return self._success_response(
                 payload={
                     "status": "success",
                     "target_id": target_id,
                     "sensor": sensor_name,
                     "new_value": target_node.sensors.get(sensor_name),
-                },
+                }
             )
-            return res.encode()
 
-        # If the requested action isn't supported, send back an error
-        res = Packet(
+        return self._error_response(f"Unknown action '{action}'")
+
+    def _error_response(self, message: str) -> bytes:
+        return Packet(
             device_id="server",
             device_type=DeviceType.SERVER,
-            payload={"status": "error", "message": f"Unknown action '{action}'"},
-        )
-        return res.encode()
+            payload={"status": "error", "message": message},
+        ).encode()
+    
+    def _success_response(
+        self, payload: dict, device_type: DeviceType = DeviceType.SERVER
+    ) -> bytes:
+        return Packet(
+            device_id="server",
+            device_type=device_type,
+            payload=payload,
+        ).encode()
