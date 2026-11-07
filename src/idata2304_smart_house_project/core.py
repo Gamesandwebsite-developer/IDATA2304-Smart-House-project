@@ -4,14 +4,14 @@ from .control_panel import ControlPanel
 from .server import IntermediateServer
 
 def main() -> None:
-    print("=========================================")
+    print("-----------------------------------------")
     print(" Smart House Communication MVP Simulation")
-    print("=========================================")
+    print("-----------------------------------------")
 
-    # 1. Start Intermediate Server
+    # Starting the IntermediateServer
     server = IntermediateServer()
 
-    # 2. Instantiate and Register Nodes
+    # Instantiate and register nodes
     temp_sensor = SensorActuatorNode("temp_node_01", DeviceType.TEMPERATURE_SENSOR)
     temp_sensor.update_sensor("temperature", 23.4)
     server.register_node(temp_sensor)
@@ -19,11 +19,11 @@ def main() -> None:
     irrigator_node = SensorActuatorNode("irrigator_node_01", DeviceType.IRRIGATOR)
     server.register_node(irrigator_node)
 
-    # 3. Instantiate Control Panel Client
+    # Instantiate controlpanel client
     admin_panel = ControlPanel("admin_user", access_level="admin")
-    server.register_client(admin_panel)
+    server.register_client(admin_panel.user_id)
 
-    # 4. Test READ Execution over Packet Bytes
+    # Test READ execution over packet bytes
     print("\n[READ Request] Querying temperature sensor...")
     read_bytes = admin_panel.create_read_request("temp_node_01", "temperature")
     print(f"Sent Bytes:     {read_bytes}")
@@ -32,7 +32,7 @@ def main() -> None:
     read_packet = Packet.decode(read_response_bytes)
     print(f"Decoded Packet: {read_packet}")
 
-    # 5. Test WRITE Execution over Packet Bytes
+    # Test WRITE execution over packet bytes
     print("\n[WRITE Request] Activating irrigator valve...")
     write_bytes = admin_panel.create_write_request("irrigator_node_01", "irrigator_valve", "ON")
     print(f"Sent Bytes:     {write_bytes}")
