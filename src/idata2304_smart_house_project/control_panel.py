@@ -26,7 +26,7 @@ class ControlPanel:
             device_type=self.device_type,
             payload={"action": "WRITE", "target_id": target_node_id, "actuator": actuator, "state": state}
         )
-        return packet.encode()  # <--- Added missing return statement here
+        return packet.encode()  
 
     def create_list_nodes_request(self) -> bytes:
         """Creates a request packet to list all connected/registered nodes."""
