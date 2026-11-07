@@ -3,6 +3,7 @@ import struct
 from typing import Dict, Optional
 from .api import DeviceType, Packet
 from .sensor_node import SensorActuatorNode
+from .access_control import AccessControlManager
 
 #Central message broker router responsible for handling network node registry and packet routing.
 class IntermediateServer:
@@ -65,14 +66,21 @@ class IntermediateServer:
     
 
     def route_message(self, raw_bytes: bytes) -> bytes:
-        """Parses incoming JSON bytes, resolves target routes, and dispatches actions."""
         packet = Packet.decode(raw_bytes)
 
         if not packet.payload:
             return self._error_response("Missing payload")
+        
+        payload = packet.payload
+        action = payload.get("action") or ""
 
-        action = packet.payload.get("action")
+        access_level = payload.get("access_level", "guest")
+        actuator = payload.get("actuator", "")
 
+        if not AccessControlManager.is_authorized(access_level, action, actuator):
+            return self._error_response(
+                f"Access denied: role '{access_level}' cannot perform '{action}' on '{actuator}'."
+            )
         # Action: LIST_NODES 
         if action == "LIST_NODES":
             nodes_info = {
