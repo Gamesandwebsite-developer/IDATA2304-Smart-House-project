@@ -1,4 +1,10 @@
 # this file creates a control panel and uses a command line interface to interact with it
+
+# to run this file, a server must be running first, using the command:
+# python -m idata2304_smart_house_project.__main__
+# then run this file in a separate terminal to start the control panel CLI, using the command:
+# python -m idata2304_smart_house_project.cli
+
 import asyncio     # runs the asynchronous server
 
 from .api import Packet
@@ -77,7 +83,7 @@ async def main() -> None:
     host = input('Server host [127.0.0.1]: ').strip() or '127.0.0.1'
     port = int(input('Server port [8081]: ').strip() or '8081')
     user_id = input('User ID [admin_user]: ').strip() or 'admin_user'
-    access_level = input('Access level [admin]:').strip() or 'admin'
+    access_level = input('Access level [admin]: ').strip() or 'admin'
 
     # create a control panel object and a network client to let it communicate with the server
     panel = ControlPanel(user_id, access_level)
@@ -119,11 +125,11 @@ async def main() -> None:
             ):
                 print(f'{i}. {node_id} / {sensor}')
 
-            sensor_choice = input('\nChoose sensor option: ').strip()
+            selection_text = input('\nChoose sensor option: ').strip()
 
             try:
-                choice = int(sensor_choice)
-                target_node_id, resource = sensors[choice - 1]
+                selection = int(selection_text)
+                target_node_id, resource = sensors[selection - 1]
             except (ValueError, IndexError):
                 print('Invalid sensor option')
                 continue
@@ -137,21 +143,93 @@ async def main() -> None:
 
         elif choice == '3':
             # write actuator
+            actuators = []
 
-            # ask for target_node_id, actuator, and state
-            # create a WRITRE packet
-            # send it to server
-            # print the decoded response
-            pass
+            for node_id, node_info in nodes.items():
+                for actuator in node_info['actuators']:
+                    actuators.append((node_id, actuator))
+
+            if not actuators:
+                print('No actuators are available')
+                continue
+
+            print('\nAvailable actuators:')
+
+            for i, (node_id, actuator) in enumerate(
+                actuators,
+                start=1,
+            ):
+                print(f'{i}. {node_id} / {actuator}')
+
+            selection_text = input('\nChoose actuator option: ').strip()
+
+            try:
+                selection = int(selection_text)
+                target_node_id, actuator = actuators[selection - 1]
+            except (ValueError, IndexError):
+                print('Invalid actuator selection')
+                continue
+
+            state = input('Enter state: ').strip()
+
+            packet = panel.create_write_request(
+                target_node_id,
+                actuator,
+                state,
+            )
+            result = await send_request(client, packet)
+
+            if result:
+                print(
+                    f'{result['actuator']} ' f'at {target_node_id}: ' f'{result['new_state']}')
 
         elif choice == '4':
             # update sensor
+            sensors = []
 
-            # ask fir target_node_id, sensor, and value
-            # create an UPDATE_SENSOR packet
-            # send it to server
-            # print the decoded response
-            pass
+            for node_id, node_info in nodes.items():
+                for sensor in node_info['sensors']:
+                    sensors.append((node_id, sensor))
+
+            if not sensors:
+                print('No sensors are available')
+                continue
+
+            print('\nAvailable sensors:')
+
+            for i, (node_id, sensor) in enumerate(
+                sensors,
+                start=1,
+            ):
+                print(f'{i}. {node_id} / {sensor}')
+
+            selection_text = input('\nChoose sensor option: ').strip()
+
+            try:
+                selection = int(selection_text)
+                target_node_id, sensor = sensors[selection - 1]
+            except (ValueError, IndexError):
+                print('Invalid sensor selection')
+                continue
+
+            value_text = input('\nEnter new sensor value: ').strip()
+
+            try:
+                value = float(value_text)
+            except ValueError:
+                print('Sensor value must be a number')
+                continue
+
+            packet = panel.create_sensor_update_request(
+                target_node_id,
+                sensor,
+                value,
+            )
+            result = await send_request(client, packet)
+
+            if result:
+                print(
+                    f'{result['sensor']} ' f'at {target_node_id}: ' f'{result['new_value']}')
 
         elif choice == '5':
             print('Shutting down control panel...')
