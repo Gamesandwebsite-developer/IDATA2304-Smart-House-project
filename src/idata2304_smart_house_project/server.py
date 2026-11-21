@@ -94,11 +94,11 @@ class IntermediateServer:
             return self._success_response(payload={"status": "success", "nodes": nodes_info})
 
         # Target validation for node-specific actions (READ, WRITE, UPDATE_SENSOR)
-        target_id = packet.payload.get("target_id")
-        if target_id not in self.nodes:
-            return self._error_response(f"Target node '{target_id}' not found")
+        target_node_id = packet.payload.get("target_node_id")
+        if target_node_id not in self.nodes:
+            return self._error_response(f"Target node '{target_node_id}' not found")
 
-        target_node = self.nodes[target_id]
+        target_node = self.nodes[target_node_id]
 
         # Action routing
         if action == "READ":
@@ -129,7 +129,7 @@ class IntermediateServer:
             return self._success_response(
                 payload={
                     "status": "success",
-                    "target_id": target_id,
+                    "target_node_id": target_node_id,
                     "sensor": sensor_name,
                     "new_value": target_node.sensors.get(sensor_name),
                 }
