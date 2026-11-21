@@ -94,7 +94,7 @@ class IntermediateServer:
             return self._success_response(payload={"status": "success", "nodes": nodes_info})
 
         # Target validation for node-specific actions (READ, WRITE, UPDATE_SENSOR)
-        target_id = packet.payload.get("target_id")
+        target_id = packet.payload.get("target_node_id")
         if target_id not in self.nodes:
             return self._error_response(f"Target node '{target_id}' not found")
 

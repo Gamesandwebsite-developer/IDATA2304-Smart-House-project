@@ -13,7 +13,7 @@ async def main() -> None:
     server.register_node(SensorActuatorNode("temp_node_1", DeviceType.TEMPERATURE_SENSOR))
     server.register_node(SensorActuatorNode("door_lock_1", DeviceType.DOOR_LOCK))
 
-    print("Starting Smart House Server on 127.0.0.1:5555...")
+    print("Starting Smart House Server on 127.0.0.1:8081...")
     await server.start()
 
 

@@ -1,4 +1,4 @@
-from .api import DeviceType, Packet
+from .api import Command, DeviceType, Packet
 
 class ControlPanel:
     def __init__(
@@ -17,7 +17,7 @@ class ControlPanel:
             device_id=self.user_id,
             device_type=self.device_type,
             payload={
-                "action": "READ",
+                "command": Command.READ.value,
                 "target_node_id": target_node_id,
                 "resource": resource,
                 "access_level": self.access_level,
@@ -33,7 +33,7 @@ class ControlPanel:
             device_id=self.user_id,
             device_type=self.device_type,
             payload={
-                "action": "WRITE",
+                "command": Command.WRITE.value,
                 "target_node_id": target_node_id,
                 "actuator": actuator,
                 "state": state,
@@ -48,7 +48,7 @@ class ControlPanel:
             device_id=self.user_id,
             device_type=self.device_type,
             payload={
-                "action": "LIST_NODES",
+                "command": Command.LIST_NODES.value,
                 "access_level": self.access_level,
             },
         )
@@ -62,7 +62,7 @@ class ControlPanel:
             device_id=self.user_id,
             device_type=self.device_type,
             payload={
-                "action": "UPDATE_SENSOR",
+                "command": Command.UPDATE_SENSOR.value,
                 "target_node_id": target_node_id,
                 "sensor": sensor,
                 "value": value,

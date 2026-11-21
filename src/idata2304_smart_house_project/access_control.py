@@ -1,4 +1,5 @@
 from enum import Enum
+from .api import Command
 
 class AccessLevel(Enum):
     ADMIN = "admin"
@@ -10,7 +11,7 @@ class AccessLevel(Enum):
 class AccessControlManager:
 
     @staticmethod
-    def is_authorized(access_level_str: str, action: str, actuator: str = "") -> bool:
+    def is_authorized(access_level_str: str, command: str, actuator: str = "") -> bool:
         try:
             role = AccessLevel(access_level_str.lower())
         except ValueError:
@@ -21,11 +22,11 @@ class AccessControlManager:
             return True
 
         # All authenticated roles can read data and list nodes
-        if action in ("READ", "LIST_NODES","UPDATE_SENSOR"):
+        if command in (Command.READ, Command.LIST_NODES, Command.UPDATE_SENSOR):
             return True
 
         # WRITE permissions based on role
-        if action == "WRITE":
+        if command == Command.WRITE:
             # Restricted security hardware: only Admin/Owner can toggle door locks
             if actuator == "door_lock" and role not in (AccessLevel.ADMIN, AccessLevel.OWNER):
                 return False

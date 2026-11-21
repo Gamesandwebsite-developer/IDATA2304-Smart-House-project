@@ -2,8 +2,15 @@ import json
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from typing import Any, override
+
+
+class Command(StrEnum):
+    LIST_NODES = "LIST_NODES"
+    READ = "READ"
+    WRITE = "WRITE"
+    UPDATE_SENSOR = "UPDATE_SENSOR"
 
 
 class DeviceType(IntEnum):
