@@ -1,35 +1,59 @@
-from typing import Any, Dict
-from .api import DeviceType
+from typing import Any
+from .api import Command, DeviceType, supports_command, validate_device_value
 
 
 class SensorActuatorNode:
-    """Represents an edge hardware node holding local sensor telemetry and actuator states."""
-
     def __init__(self, node_id: str, device_type: DeviceType) -> None:
         self.node_id = node_id
         self.device_type = device_type
-        self.sensors: Dict[str, float] = {}
-        self.actuators: Dict[str, str] = {}
-        
-        # Self-initialize default components based on node role
+        self.sensors: dict[str, float] = {}
+        self.actuators: dict[str, Any] = {}
+        self.sensor_types: dict[str, DeviceType] = {}
+        self.actuator_types: dict[str, DeviceType] = {}
         self._initialize_hardware()
 
+    def add_sensor(self, name: str, device_type: DeviceType, value: float) -> None:
+        if not supports_command(device_type, Command.READ) or not validate_device_value(device_type, value):
+            raise ValueError(f"Invalid sensor definition/value: {name}")
+        self.sensors[name] = value
+        self.sensor_types[name] = device_type
+
+    def add_actuator(self, name: str, device_type: DeviceType, state: Any) -> None:
+        if not supports_command(device_type, Command.WRITE) or not validate_device_value(device_type, state):
+            raise ValueError(f"Invalid actuator definition/value: {name}")
+        self.actuators[name] = state
+        self.actuator_types[name] = device_type
+
     def _initialize_hardware(self) -> None:
-        """Helper method to isolate component initialization and keep __init__ clean."""
         if self.device_type == DeviceType.TEMPERATURE_SENSOR:
-            self.sensors["temperature"] = 20.0
+            self.add_sensor("temperature", DeviceType.TEMPERATURE_SENSOR, 20.0)
         elif self.device_type == DeviceType.DOOR_LOCK:
-            self.actuators["door_lock"] = "LOCKED"
+            self.add_actuator("door_lock", DeviceType.DOOR_LOCK, "LOCKED")
         elif self.device_type == DeviceType.IRRIGATOR:
-            self.actuators["irrigator_valve"] = "OFF"
+            self.add_actuator("irrigator_valve", DeviceType.IRRIGATOR, "OFF")
 
-    def update_sensor(self, sensor_name: str, value: float) -> None:
-        """Updates or registers a live sensor reading."""
+    def update_sensor(self, sensor_name: str, value: Any) -> bool:
+        """Update a sensor if it exists and the new value is valid."""
+
+        device_type = self.sensor_types.get(sensor_name)
+
+        # Check that the sensor exists.
+        if device_type is None:
+            return False
+
+        # Check the value against the rules in device_types.json.
+        if not validate_device_value(device_type, value):
+            return False
+
+        # Store the new reading.
         self.sensors[sensor_name] = value
+        return True
 
-    def execute_command(self, actuator_name: str, state: str) -> bool:
-        """Executes a state change command on a target actuator if present on this node."""
-        if actuator_name in self.actuators:
-            self.actuators[actuator_name] = state
-            return True
-        return False
+    def execute_command(self, actuator_name: str, state: Any) -> bool:
+        device_type = self.actuator_types.get(actuator_name)
+        if (device_type is None
+                or not supports_command(device_type, Command.WRITE)
+                or not validate_device_value(device_type, state)):
+            return False
+        self.actuators[actuator_name] = state
+        return True

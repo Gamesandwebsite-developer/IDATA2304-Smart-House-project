@@ -33,10 +33,11 @@ def test_read_routing():
 
     res_bytes = server.route_message(req)
     res_packet = Packet.decode(res_bytes)
+    
+    print("Server response:", res_packet.payload)
 
-    # Tell Pylance to guarantee payload is not None before subscripting
     assert res_packet.payload is not None
-    assert res_packet.payload["status"] == "success"
+    assert res_packet.payload["status"] == "success", res_packet.payload
     assert res_packet.payload["value"] == 19.8
 
 
@@ -51,9 +52,9 @@ def test_write_routing():
     res_bytes = server.route_message(req)
     res_packet = Packet.decode(res_bytes)
 
-    # Tell Pylance to guarantee payload is not None before subscripting
+
     assert res_packet.payload is not None
-    assert res_packet.payload["status"] == "success"
+    assert res_packet.payload["status"] == "success", res_packet.payload
     assert node.actuators["irrigator_valve"] == "ON"
 
 
@@ -71,7 +72,7 @@ def test_list_nodes_routing():
     res_packet = Packet.decode(res_bytes)
 
     assert res_packet.payload is not None
-    assert res_packet.payload["status"] == "success"
+    assert res_packet.payload["status"] == "success", res_packet.payload
     nodes = res_packet.payload["nodes"]
     assert "temp_01" in nodes
     assert "door_01" in nodes
@@ -89,12 +90,23 @@ def test_sensor_update_routing():
     res_packet = Packet.decode(res_bytes)
 
     assert res_packet.payload is not None
-    assert res_packet.payload["status"] == "success"
+    assert res_packet.payload["status"] == "success", res_packet.payload
     assert res_packet.payload["new_value"] == 25.5
     assert node.sensors["temperature"] == 25.5
 
 
 def test_guest_permission_restriction():
+    server = IntermediateServer()
+    node = SensorActuatorNode("door_node", DeviceType.DOOR_LOCK)
+    server.register_node(node)
+
     panel = ControlPanel("guest_1", "guest")
-    with pytest.raises(PermissionError):
-        panel.create_write_request("door_node", "door_lock", "UNLOCK")
+
+    request = panel.create_write_request(
+        "door_node", "door_lock", "UNLOCKED"
+    )
+
+    response = Packet.decode(server.route_message(request))
+
+    assert response.payload is not None
+    assert response.payload["status"] == "error"

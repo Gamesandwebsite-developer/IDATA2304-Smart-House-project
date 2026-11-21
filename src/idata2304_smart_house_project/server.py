@@ -1,7 +1,7 @@
 import asyncio
 import struct
 from typing import Dict, Optional
-from .api import DeviceType, Packet
+from .api import Command, DeviceType, Packet
 from .sensor_node import SensorActuatorNode
 from .access_control import AccessControlManager
 
@@ -72,17 +72,18 @@ class IntermediateServer:
             return self._error_response("Missing payload")
         
         payload = packet.payload
-        action = payload.get("action") or ""
+        command = payload.get("command") or ""
 
         access_level = payload.get("access_level", "guest")
         actuator = payload.get("actuator", "")
 
-        if not AccessControlManager.is_authorized(access_level, action, actuator):
+        if not AccessControlManager.is_authorized(access_level, command, actuator):
             return self._error_response(
-                f"Access denied: role '{access_level}' cannot perform '{action}' on '{actuator}'."
+                f"Access denied: role '{access_level}' cannot perform '{command}' on '{actuator}'."
             )
-        # Action: LIST_NODES 
-        if action == "LIST_NODES":
+        
+        # Command: LIST_NODES 
+        if command == Command.LIST_NODES:
             nodes_info = {
                 node_id: {
                     "device_type": node.device_type.name,
@@ -100,19 +101,26 @@ class IntermediateServer:
 
         target_node = self.nodes[target_id]
 
-        # Action routing
-        if action == "READ":
+        # Command routing
+        if command == Command.READ:
             resource = str(packet.payload.get("resource", ""))
-            val = target_node.sensors.get(resource)
+            if resource in target_node.sensors:
+                val = target_node.sensors[resource]
+            elif resource in target_node.actuators:
+                val = target_node.actuators[resource]
+            else:
+                return self._error_response(f"Unknown resource '{resource}'")
             return self._success_response(
                 payload={"status": "success", "resource": resource, "value": val},
                 device_type=target_node.device_type,
             )
 
-        elif action == "WRITE":
+        elif command == Command.WRITE:
             actuator = str(packet.payload.get("actuator", ""))
-            state = str(packet.payload.get("state", ""))
+            state = packet.payload.get("state")
             success = target_node.execute_command(actuator, state)
+            if not success:
+                return self._error_response(f"Invalid actuator or value for '{actuator}'")
             return self._success_response(
                 payload={
                     "status": "success" if success else "failed",
@@ -122,20 +130,25 @@ class IntermediateServer:
                 device_type=target_node.device_type,
             )
 
-        elif action == "UPDATE_SENSOR":
-            sensor_name = str(packet.payload.get("sensor", ""))
-            value = float(packet.payload.get("value", 0.0))
-            target_node.update_sensor(sensor_name, value)
+        elif command == Command.UPDATE_SENSOR:
+            sensor_name = str(payload.get("sensor", ""))
+            value = payload.get("value")
+
+            if not target_node.update_sensor(sensor_name, value):
+                return self._error_response(
+                    f"Invalid sensor or value for '{sensor_name}'"
+                )
+
             return self._success_response(
                 payload={
                     "status": "success",
                     "target_id": target_id,
                     "sensor": sensor_name,
-                    "new_value": target_node.sensors.get(sensor_name),
+                    "new_value": target_node.sensors[sensor_name],
                 }
             )
 
-        return self._error_response(f"Unknown action '{action}'")
+        return self._error_response(f"Unknown command '{command}'")
 
     def _error_response(self, message: str) -> bytes:
         return Packet(
