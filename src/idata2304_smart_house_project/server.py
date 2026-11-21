@@ -1,16 +1,19 @@
+
 import asyncio
 import struct
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from .api import Command, DeviceType, Packet, split_address
 from .sensor_node import SensorActuatorNode
 from .access_control import AccessControlManager
 
 
-# Central request router.
-# Simulated sensor nodes are stored as local objects.
+MAX_MESSAGE_SIZE = 1024 * 1024  # 1 MB
+
+
 class IntermediateServer:
     """Accept TCP requests and route commands to simulated nodes."""
+
     def __init__(
         self, host: str = "127.0.0.1", port: int = 8081
     ) -> None:
@@ -20,11 +23,10 @@ class IntermediateServer:
         self.clients: Dict[str, str] = {}
         self.server: Optional[asyncio.Server] = None
 
-   
-    def register_node(self, node: SensorActuatorNode) -> None: 
+    def register_node(self, node: SensorActuatorNode) -> None:
         """Store a simulated node under its unique node ID."""
         self.nodes[node.node_id] = node
-        
+
     def register_client(self, user_id: str) -> None:
         """Register a control-panel identity."""
         self.clients[user_id] = user_id
@@ -56,7 +58,7 @@ class IntermediateServer:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter
     ) -> None:
-        """Receive requests and return responses over TCP."""
+        """Receive packets and handle connection or messaging errors."""
 
         addr = writer.get_extra_info("peername")
         print(f"[SERVER] Client connected: {addr}")
@@ -67,40 +69,83 @@ class IntermediateServer:
                 header = await reader.readexactly(4)
                 msg_length = struct.unpack("!I", header)[0]
 
-                # Read the complete packet.
+                # Reject empty or oversized messages.
+                if not 0 < msg_length <= MAX_MESSAGE_SIZE:
+                    response = self._error_response(
+                        "Invalid message size"
+                    )
+
+                    writer.write(
+                        struct.pack("!I", len(response)) + response
+                    )
+                    await writer.drain()
+
+                    # Close the connection because the remaining
+                    # message body may be unread.
+                    break
+
+                # Read the complete message.
                 raw_bytes = await reader.readexactly(msg_length)
 
-                # Process the packet.
-                response_bytes = self.route_message(raw_bytes)
+                # Decode, validate and process the request.
+                response = self.route_message(raw_bytes)
 
-                # Send the response with its length prefix.
-                response_length = struct.pack(
-                    "!I", len(response_bytes)
+                # Send the response with its four-byte length prefix.
+                writer.write(
+                    struct.pack("!I", len(response)) + response
                 )
-
-                writer.write(response_length + response_bytes)
                 await writer.drain()
 
-        except (asyncio.IncompleteReadError, ConnectionResetError):
+        except asyncio.IncompleteReadError:
             print(f"[SERVER] Client disconnected: {addr}")
 
+        except (
+            ConnectionResetError,
+            BrokenPipeError,
+            OSError
+        ) as error:
+            print(f"[SERVER] Connection error: {error}")
+
         finally:
+            # Always close the client's connection.
             writer.close()
-            await writer.wait_closed()
+
+            try:
+                await writer.wait_closed()
+            except OSError:
+                pass
 
     def route_message(self, raw_bytes: bytes) -> bytes:
-        """Decode a request, check permissions and return a response."""
+        """Validate and route incoming protocol messages."""
 
-        packet = Packet.decode(raw_bytes)
+        # Handle invalid JSON and malformed packets.
+        try:
+            packet = Packet.decode(raw_bytes)
 
-        if not packet.payload:
-            return self._error_response("Missing payload")
+        except (
+            ValueError,
+            TypeError,
+            KeyError,
+            UnicodeDecodeError
+        ):
+            return self._error_response("Invalid packet format")
+
+        # Every request must have a dictionary payload.
+        if not isinstance(packet.payload, dict):
+            return self._error_response(
+                "Missing or invalid payload"
+            )
 
         payload = packet.payload
-        command = payload.get("command") or ""
+        command = payload.get("command")
 
-        # Resolve a hierarchical address, if provided.
-        # This identifies both the node and its component.
+        # Check that the packet contains a valid command field.
+        if not isinstance(command, str) or not command:
+            return self._error_response(
+                "Missing or invalid command"
+            )
+
+        # Resolve the target node and component.
         target_id = payload.get("target_node_id")
         component = None
 
@@ -118,17 +163,27 @@ class IntermediateServer:
                 target_id, component = split_address(
                     payload["address"]
                 )
-            except ValueError as exc:
-                return self._error_response(str(exc))
+            except ValueError as error:
+                return self._error_response(str(error))
 
-        # Check whether the user is allowed to perform the command.
+        # Check whether the control panel has permission.
         access_level = payload.get("access_level", "guest")
+
+        if not isinstance(access_level, str):
+            return self._error_response(
+                "Invalid access level"
+            )
 
         actuator = (
             component
             if command == Command.WRITE and component
             else payload.get("actuator", "")
         )
+
+        if not isinstance(actuator, str):
+            return self._error_response(
+                "Invalid actuator name"
+            )
 
         if not AccessControlManager.is_authorized(
             access_level, command, actuator
@@ -138,7 +193,7 @@ class IntermediateServer:
                 f"cannot perform '{command}' on '{actuator}'."
             )
 
-        # Return all registered nodes.
+        # LIST_NODES: Return all registered sensor-actuator nodes.
         if command == Command.LIST_NODES:
             nodes_info = {
                 node_id: {
@@ -156,7 +211,12 @@ class IntermediateServer:
                 }
             )
 
-        # All remaining commands require a valid target node.
+        # Commands other than LIST_NODES need a valid node.
+        if not isinstance(target_id, str):
+            return self._error_response(
+                "Missing or invalid target node ID"
+            )
+
         if target_id not in self.nodes:
             return self._error_response(
                 f"Target node '{target_id}' not found"
@@ -164,19 +224,24 @@ class IntermediateServer:
 
         target_node = self.nodes[target_id]
 
-        # READ: Retrieve a sensor value or actuator state.
+        # READ: Retrieve a sensor reading or actuator status.
         if command == Command.READ:
             resource = (
                 component
                 if component is not None
-                else str(payload.get("resource", ""))
+                else payload.get("resource", "")
             )
 
+            if not isinstance(resource, str):
+                return self._error_response(
+                    "Invalid resource name"
+                )
+
             if resource in target_node.sensors:
-                val = target_node.sensors[resource]
+                value = target_node.sensors[resource]
 
             elif resource in target_node.actuators:
-                val = target_node.actuators[resource]
+                value = target_node.actuators[resource]
 
             else:
                 return self._error_response(
@@ -187,23 +252,29 @@ class IntermediateServer:
                 payload={
                     "status": "success",
                     "resource": resource,
-                    "value": val
+                    "value": value
                 },
                 device_type=target_node.device_type
             )
 
-        # WRITE: Change a specific actuator state.
+        # WRITE: Change the state of a specific actuator.
         elif command == Command.WRITE:
             actuator = (
                 component
                 if component is not None
-                else str(payload.get("actuator", ""))
+                else payload.get("actuator", "")
             )
 
-            # Keep numeric values numeric for devices like thermostats.
-            state = packet.payload.get("state")
+            if not isinstance(actuator, str):
+                return self._error_response(
+                    "Invalid actuator name"
+                )
 
-            # The sensor node validates the value using device_types.json.
+            # Keep the original type of the value.
+            # For example, a thermostat expects a number.
+            state = payload.get("state")
+
+            # The node validates the value using device_types.json.
             success = target_node.execute_command(
                 actuator, state
             )
@@ -215,23 +286,29 @@ class IntermediateServer:
 
             return self._success_response(
                 payload={
-                    "status": "success" if success else "failed",
+                    "status": "success",
                     "actuator": actuator,
                     "new_state": target_node.actuators.get(actuator),
                 },
                 device_type=target_node.device_type
             )
 
-        # UPDATE_SENSOR: Update a simulated sensor value.
+        # UPDATE_SENSOR: Update a simulated sensor reading.
         elif command == Command.UPDATE_SENSOR:
             sensor_name = (
                 component
                 if component is not None
-                else str(payload.get("sensor", ""))
+                else payload.get("sensor", "")
             )
 
-            value = packet.payload.get("value")
+            if not isinstance(sensor_name, str):
+                return self._error_response(
+                    "Invalid sensor name"
+                )
 
+            value = payload.get("value")
+
+            # Check that the sensor exists and the value is valid.
             if not target_node.update_sensor(
                 sensor_name, value
             ):
@@ -250,6 +327,7 @@ class IntermediateServer:
                 }
             )
 
+        # Reject commands that are not supported.
         return self._error_response(
             f"Unknown command '{command}'"
         )
@@ -268,7 +346,7 @@ class IntermediateServer:
 
     def _success_response(
         self,
-        payload: dict,
+        payload: dict[str, Any],
         device_type: DeviceType = DeviceType.SERVER
     ) -> bytes:
         """Create a successful response packet."""
