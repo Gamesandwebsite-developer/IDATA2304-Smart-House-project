@@ -56,11 +56,27 @@ def _load_device_definitions() -> dict[str, dict[str, Any]]:
 
 DEVICE_DEFINITIONS = _load_device_definitions()
 # Keep integer identifiers compatible with the original Packet format.
-DeviceType = IntEnum(
-    "DeviceType",
-    {name: spec["id"] for name, spec in DEVICE_DEFINITIONS.items()},
-    module=__name__,
-)
+class DeviceType(IntEnum):
+    # Sensors
+    UNKNOWN_SENSOR = 0x000
+    TEMPERATURE_SENSOR = 0x001
+    LIGHT_SENSOR = 0x002
+    HUMIDITY_SENSOR = 0x003
+    MOTION_SENSOR = 0x004
+    SMOKE_FLAME_DETECTOR = 0x005
+
+    # Actuators
+    UNKNOWN_ACTUATOR = 0x100
+    IRRIGATOR = 0x101
+    FAN = 0x102
+    HEATER = 0x103
+    DOOR_LOCK = 0x104
+    THERMOSTAT_ACTUATOR = 0x105
+
+    # Control / system
+    CONTROL_PANEL = 0x200
+    PHONE = 0x201
+    SERVER = 0x202
 
 
 def supports_command(device_type: DeviceType, command: Command) -> bool:
@@ -117,4 +133,21 @@ if __name__ == "__main__":
     decoded = Packet.decode(encoded)
     print("Decoded packet object:", decoded)
     print("Is DeviceType enum restored:", isinstance(decoded.device_type, DeviceType))
-    
+
+def split_address(address: str) -> tuple[str, str]:
+    if not isinstance(address, str):
+        raise ValueError("Address must be a string")
+
+    parts = address.split("/")
+
+    if len(parts) != 4 or any(
+        not part
+        or part in (".", "..")
+        or part.strip() != part
+        for part in parts
+    ):
+        raise ValueError(
+            "Address must be 'level/room/node/component'"
+        )
+
+    return "/".join(parts[:3]), parts[3]
