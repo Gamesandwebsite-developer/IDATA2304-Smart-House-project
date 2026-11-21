@@ -1,6 +1,8 @@
 import asyncio
 import struct
 from typing import Optional
+from .api import Packet
+from .control_panel import ControlPanel
 
 
 MAX_MESSAGE_SIZE = 1024 * 1024  # 1 MB
@@ -45,11 +47,11 @@ class AsyncNetworkClient:
         if self.writer is None or self.reader is None:
             raise ConnectionError("Client is not connected")
 
-        if len(data) == 0 or len(data) > MAX_MESSAGE_SIZE:
+        if not 0 < len(data) <= MAX_MESSAGE_SIZE:
             raise ValueError("Invalid message size")
 
         try:
-            # Send the four-byte length and message.
+            # Send the four-byte length and packet.
             length_prefix = struct.pack("!I", len(data))
             self.writer.write(length_prefix + data)
 
@@ -58,7 +60,7 @@ class AsyncNetworkClient:
                 timeout=TIMEOUT
             )
 
-            # Read the response length.
+            # Read the four-byte response length.
             header = await asyncio.wait_for(
                 self.reader.readexactly(4),
                 timeout=TIMEOUT
@@ -100,3 +102,182 @@ class AsyncNetworkClient:
             self.writer = None
 
             print("[CLIENT] Disconnected from server.")
+
+
+async def send_request(
+    client: AsyncNetworkClient,
+    request: bytes
+) -> dict:
+    """Send an encoded request and return its response payload."""
+
+    response = await client.send_packet(request)
+    packet = Packet.decode(response)
+
+    if not isinstance(packet.payload, dict):
+        raise ValueError("Invalid server response")
+
+    return packet.payload
+
+
+async def read_and_display_sensor(
+    client: AsyncNetworkClient,
+    panel: ControlPanel,
+    node_id: str,
+    sensor: str
+) -> None:
+    """Read a sensor and display anomaly warnings."""
+
+    request = panel.create_read_request(node_id, sensor)
+    payload = await send_request(client, request)
+
+    if payload.get("status") != "success":
+        print("[ERROR]", payload.get("message", "Read failed"))
+        return
+
+    value = payload.get("value")
+
+    print(f"\nNode: {node_id}")
+    print(f"Sensor: {sensor}")
+    print(f"Value: {value}")
+
+    # Only check numeric sensor readings for anomalies.
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        warning = panel.check_sensor_anomaly(sensor, value)
+
+        if warning:
+            print(warning)
+        else:
+            print("Status: Normal")
+    else:
+        print("Anomaly detection not applicable")
+
+
+async def list_nodes(
+    client: AsyncNetworkClient,
+    panel: ControlPanel
+) -> None:
+    """Display registered sensor-actuator nodes."""
+
+    request = panel.create_list_nodes_request()
+    payload = await send_request(client, request)
+
+    if payload.get("status") != "success":
+        print("[ERROR]", payload.get("message", "Request failed"))
+        return
+
+    nodes = payload.get("nodes", {})
+
+    if not nodes:
+        print("No nodes registered")
+        return
+
+    print("\n===== REGISTERED NODES =====")
+
+    for node_id, information in nodes.items():
+        print(f"\nNode: {node_id}")
+        print(f"Type: {information.get('device_type')}")
+        print(f"Sensors: {information.get('sensors')}")
+        print(f"Actuators: {information.get('actuators')}")
+
+
+async def write_actuator(
+    client: AsyncNetworkClient,
+    panel: ControlPanel,
+    node_id: str,
+    actuator: str,
+    state: str
+) -> None:
+    """Send a WRITE command to a specific actuator."""
+
+    request = panel.create_write_request(
+        node_id, actuator, state
+    )
+
+    payload = await send_request(client, request)
+
+    if payload.get("status") != "success":
+        print("[ERROR]", payload.get("message", "Write failed"))
+        return
+
+    print(
+        f"Actuator '{actuator}' updated to "
+        f"{payload.get('new_state')}"
+    )
+
+
+async def main() -> None:
+    """Run the Smart Home terminal control panel."""
+
+    client = AsyncNetworkClient()
+    panel = ControlPanel("admin_user", "admin")
+
+    try:
+        await client.connect()
+
+        while True:
+            print("\n===== SMART HOME CONTROL PANEL =====")
+            print("1. List nodes")
+            print("2. Read sensor")
+            print("3. Control actuator")
+            print("4. Quit")
+
+            choice = (
+                await asyncio.to_thread(input, "Choose option: ")
+            ).strip()
+
+            if choice == "4":
+                break
+
+            try:
+                if choice == "1":
+                    await list_nodes(client, panel)
+
+                elif choice == "2":
+                    node_id = (
+                        await asyncio.to_thread(input, "Node ID: ")
+                    ).strip()
+
+                    sensor = (
+                        await asyncio.to_thread(input, "Sensor: ")
+                    ).strip()
+
+                    await read_and_display_sensor(
+                        client, panel, node_id, sensor
+                    )
+
+                elif choice == "3":
+                    node_id = (
+                        await asyncio.to_thread(input, "Node ID: ")
+                    ).strip()
+
+                    actuator = (
+                        await asyncio.to_thread(input, "Actuator: ")
+                    ).strip()
+
+                    state = (
+                        await asyncio.to_thread(input, "New state: ")
+                    ).strip()
+
+                    await write_actuator(
+                        client, panel, node_id, actuator, state
+                    )
+
+                else:
+                    print("Invalid option")
+
+            except (ConnectionError, OSError, ValueError) as error:
+                print(f"[ERROR] {error}")
+
+                # A broken TCP connection cannot be reused.
+                if isinstance(error, ConnectionError):
+                    break
+
+    except (ConnectionError, OSError) as error:
+        print(f"[ERROR] {error}")
+
+    finally:
+        await client.disconnect()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
