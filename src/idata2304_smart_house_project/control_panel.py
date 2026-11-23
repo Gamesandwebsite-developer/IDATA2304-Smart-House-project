@@ -40,8 +40,7 @@ class ControlPanel:
     ) -> bytes:
         """Request an actuator state change."""
 
-        # Do not convert state to a string.
-        # Thermostat-like devices require numeric values.
+        # Preserve the original state type because thermostats require numeric values.
         packet = Packet(
             device_id=self.user_id,
             device_type=self.device_type,
@@ -94,7 +93,7 @@ class ControlPanel:
 
         from .api import split_address
 
-        # Reject invalid address formats before sending the packet.
+        # Validate locally while leaving target resolution to the server.
         split_address(address)
 
         return Packet(

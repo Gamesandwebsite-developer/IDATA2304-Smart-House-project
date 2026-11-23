@@ -1,3 +1,4 @@
+# Test network client construction and failed connection handling.
 import pytest
 
 from idata2304_smart_house_project.client import AsyncNetworkClient

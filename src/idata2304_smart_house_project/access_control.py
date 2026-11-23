@@ -2,6 +2,7 @@ from enum import Enum
 from .api import Command
 
 class AccessLevel(Enum):
+    # These strings are the role names accepted in request payloads.
     ADMIN = "admin"
     OWNER = "owner"
     TECHNICIAN = "technician"
@@ -12,6 +13,7 @@ class AccessControlManager:
 
     @staticmethod
     def is_authorized(access_level_str: str, command: str, actuator: str = "") -> bool:
+        # Match the requested role and command against the project's permission rules.
         try:
             role = AccessLevel(access_level_str.lower())
         except ValueError:
@@ -21,7 +23,7 @@ class AccessControlManager:
         if role in (AccessLevel.ADMIN, AccessLevel.OWNER):
             return True
 
-        # All authenticated roles can read data and list nodes
+        # Every recognized role can read, list nodes, and update simulated readings.
         if command in (Command.READ, Command.LIST_NODES, Command.UPDATE_SENSOR):
             return True
 

@@ -9,6 +9,7 @@ class AnomalyDetector:
     def __init__(self) -> None:
         """Load and validate anomaly limits from JSON."""
 
+        # Resolve the settings relative to this module so startup works from any directory.
         path = Path(__file__).with_name("anomaly_limits.json")
 
         with path.open("r", encoding="utf-8") as file:
@@ -56,6 +57,7 @@ class AnomalyDetector:
         minimum = self.limits[sensor]["min"]
         maximum = self.limits[sensor]["max"]
 
+        # The minimum and maximum themselves are both normal readings.
         if value < minimum:
             return f"WARNING: Low {sensor}!"
 

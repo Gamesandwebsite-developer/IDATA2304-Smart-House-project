@@ -1,3 +1,4 @@
+# Expose the public classes and entry point at the package level.
 from .api import DeviceType, Packet
 from .sensor_node import SensorActuatorNode
 from .control_panel import ControlPanel

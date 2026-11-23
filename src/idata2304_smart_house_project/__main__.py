@@ -8,9 +8,10 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def run() -> None:
+    # Set up the default house and run its TCP server.
     server = IntermediateServer(host="127.0.0.1", port=8081)
 
-    # Register default nodes
+    # Seed the server with simulated nodes before it starts accepting connections.
     server.register_node(
         SensorActuatorNode("temp_node_1", DeviceType.TEMPERATURE_SENSOR)
     )
@@ -21,6 +22,7 @@ async def run() -> None:
 
 
 def main():
+    # Start the event loop and report a clean shutdown on Ctrl+C.
     try:
         asyncio.run(run())
     except KeyboardInterrupt:

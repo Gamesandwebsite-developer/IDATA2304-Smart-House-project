@@ -4,6 +4,7 @@ from idata2304_smart_house_project.server import IntermediateServer
 
 
 def test_invalid_json():
+    # Malformed bytes should produce an encoded error response.
     server = IntermediateServer()
 
     response = Packet.decode(
@@ -15,6 +16,7 @@ def test_invalid_json():
 
 
 def test_missing_command():
+    # A valid JSON envelope still needs a command in its payload.
     server = IntermediateServer()
 
     request = Packet(

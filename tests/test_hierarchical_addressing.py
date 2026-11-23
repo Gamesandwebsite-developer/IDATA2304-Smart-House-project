@@ -1,3 +1,4 @@
+# Exercise full component addresses through the control panel and server.
 import pytest
 
 from idata2304_smart_house_project.api import DeviceType, Packet

@@ -43,6 +43,7 @@ class IntermediateServer:
     async def start(self) -> None:
         """Start the TCP server."""
 
+        # asyncio runs the connection handler separately for each client.
         self.server = await asyncio.start_server(
             self._handle_connection,
             self.host,
@@ -74,11 +75,11 @@ class IntermediateServer:
 
         try:
             while True:
-                # Read the four-byte message length.
+                # The first four bytes are the body length in network byte order.
                 header = await reader.readexactly(4)
                 msg_length = struct.unpack("!I", header)[0]
 
-                # Reject empty or oversized messages.
+                # Reply and close on an invalid length because the next frame boundary is uncertain.
                 if not 0 < msg_length <= MAX_MESSAGE_SIZE:
                     response = self._error_response(
                         "Invalid message size"
@@ -90,13 +91,13 @@ class IntermediateServer:
                     await writer.drain()
                     break
 
-                # Read the complete request.
+                # Read the exact length because TCP can split a request across multiple reads.
                 raw_bytes = await reader.readexactly(msg_length)
 
                 # Let RequestHandler process the request.
                 response = self.route_message(raw_bytes)
 
-                # Send the response.
+                # Prefix the reply with its length using the same format as the request.
                 writer.write(
                     struct.pack("!I", len(response)) + response
                 )

@@ -5,7 +5,7 @@
 # then run this file in a separate terminal to start the control panel CLI, using the command:
 # python -m idata2304_smart_house_project.cli
 
-import asyncio     # runs the asynchronous server
+import asyncio     # runs the asynchronous client menu
 
 from idata2304_smart_house_project.api import Packet
 from idata2304_smart_house_project.client import AsyncNetworkClient
@@ -21,6 +21,7 @@ def print_menu() -> None:
 
 
 def print_nodes(nodes: dict) -> None:
+    # Display each node alongside the operations its components offer.
     if not nodes:
         print('\nNo nodes found')
         return
@@ -41,6 +42,7 @@ async def refresh_nodes(
         client: AsyncNetworkClient,
         panel: ControlPanel,
 ) -> dict:
+    # Refresh the menu's node lookup from the server's current registry.
     packet = panel.create_list_nodes_request()
     response_bytes = await client.send_packet(packet)
     response = Packet.decode(response_bytes)
@@ -60,6 +62,7 @@ async def send_request(
     client: AsyncNetworkClient,
     packet: bytes,
 ) -> dict | None:
+    # Print server errors here so the menu can display successful results only.
     response_bytes = await client.send_packet(packet)
     response = Packet.decode(response_bytes)
 
@@ -75,6 +78,7 @@ async def send_request(
 
 
 async def main() -> None:
+    # Discover nodes, dispatch menu actions, and close the client when the user quits.
     print('\n-----------------------------')
     print('Smart House Control Panel CLI')
     print('-----------------------------\n')
@@ -92,7 +96,7 @@ async def main() -> None:
     # connect client to server
     await client.connect()
 
-    # creating a list to keep track of avilable nodes
+    # Cache nodes by ID for the sensor and actuator menus.
     nodes = await refresh_nodes(client, panel)
 
     # menu loop
@@ -106,7 +110,7 @@ async def main() -> None:
             print_nodes(nodes)
 
         elif choice == '2':
-            # read sensor
+            # Pair each sensor name with its node ID because names can repeat across nodes.
             sensors = []
 
             for node_id, node_info in nodes.items():
@@ -129,6 +133,7 @@ async def main() -> None:
 
             try:
                 selection = int(selection_text)
+                # The displayed menu starts at 1 and Python list indices start at 0.
                 target_node_id, resource = sensors[selection - 1]
             except (ValueError, IndexError):
                 print('Invalid sensor option')
@@ -142,7 +147,7 @@ async def main() -> None:
                     f'{result['resource']}' f' at {target_node_id}: ' f'{result['value']}')
 
         elif choice == '3':
-            # write actuator
+            # Keep the node ID with each actuator so a menu choice identifies its target.
             actuators = []
 
             for node_id, node_info in nodes.items():
@@ -184,7 +189,7 @@ async def main() -> None:
                     f'{result['actuator']} ' f'at {target_node_id}: ' f'{result['new_state']}')
 
         elif choice == '4':
-            # update sensor
+            # Build the choices from simulated sensors in the cached registry.
             sensors = []
 
             for node_id, node_info in nodes.items():
@@ -242,6 +247,6 @@ async def main() -> None:
     await client.disconnect()
 
 
-# required because file has async code :P
+# Start the client menu when this module is run directly.
 if __name__ == '__main__':
     asyncio.run(main())

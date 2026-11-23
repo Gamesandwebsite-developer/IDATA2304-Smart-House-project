@@ -13,6 +13,7 @@ class RequestHandler:
         self,
         nodes: Dict[str, SensorActuatorNode]
     ) -> None:
+        # Keep the server's registry by reference so new registrations are visible here.
         self.nodes = nodes
 
     def handle(self, raw_bytes: bytes) -> bytes:
@@ -35,7 +36,7 @@ class RequestHandler:
         target_id = payload.get("target_node_id")
         component = None
 
-        # Resolve hierarchical device addresses.
+        # A full address supplies both the registry key and the component name.
         if "address" in payload:
             if command not in (
                 Command.READ,
@@ -53,12 +54,13 @@ class RequestHandler:
             except ValueError as error:
                 return self._error_response(str(error))
 
-        # Check access permissions.
+        # Check the role before reading or changing any node state.
         access_level = payload.get("access_level", "guest")
 
         if not isinstance(access_level, str):
             return self._error_response("Invalid access level")
 
+        # Use the resolved actuator name for permission checks on addressed writes.
         actuator = (
             component
             if command == Command.WRITE and component

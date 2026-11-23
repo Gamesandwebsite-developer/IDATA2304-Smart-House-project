@@ -9,6 +9,7 @@ from typing import Any, override
 
 
 class Command(StrEnum):
+    # The command strings are sent verbatim in JSON payloads.
     LIST_NODES = "LIST_NODES"
     READ = "READ"
     WRITE = "WRITE"
@@ -80,6 +81,7 @@ class DeviceType(IntEnum):
 
 
 def supports_command(device_type: DeviceType, command: Command) -> bool:
+    # Look up the operations declared for this device in the JSON configuration.
     return command.value in DEVICE_DEFINITIONS[device_type.name]["supported_commands"]
 
 
@@ -98,13 +100,14 @@ def validate_device_value(device_type: DeviceType, value: Any) -> bool:
 
 @dataclass
 class Packet:
+    # The envelope identifies the sender and carries command or response data.
     device_id: str
     device_type: DeviceType
     timestamp: int | None = field(default_factory=lambda: int(time.time()))
     payload: dict[str, Any] | None = None
 
     def encode(self) -> bytes:
-        # Appending \n ensures clean stream socket message framing
+        # Keep the trailing newline in the JSON body. TCP framing uses a separate length prefix.
         return (json.dumps(asdict(self)) + "\n").encode()
 
     @classmethod
@@ -118,7 +121,7 @@ class Packet:
     @override
     def __str__(self) -> str:
         data = asdict(self)
-        # Add "or 0" to handle the None case safely for the type checker
+        # Display a missing timestamp as the Unix epoch.
         data["timestamp"] = datetime.fromtimestamp(float(self.timestamp or 0)).__str__()
         return "Packet: " + str(data)
 
@@ -135,6 +138,7 @@ if __name__ == "__main__":
     print("Is DeviceType enum restored:", isinstance(decoded.device_type, DeviceType))
 
 def split_address(address: str) -> tuple[str, str]:
+    # Return the first three path segments as the node ID and the last as the component.
     if not isinstance(address, str):
         raise ValueError("Address must be a string")
 

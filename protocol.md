@@ -136,7 +136,7 @@ Example request:
 
 ### Framing
 
-The JSON text is sent with **4 bytes in front** that say how long it is.
+A four-byte unsigned integer in network byte order (big-endian) gives the length of the encoded JSON body in bytes. The prefix itself is excluded from the count. The client and server accept body lengths from 1 byte to 1 MiB.
 
 ```
 +----------------+---------------------+

@@ -1,3 +1,4 @@
+# Exercise packet encoding and server routing with simulated devices.
 import pytest
 from idata2304_smart_house_project import (
     ControlPanel,
@@ -9,6 +10,7 @@ from idata2304_smart_house_project import (
 
 
 def test_packet_decode_enum_preservation():
+    # Decoding restores the enum from the integer used on the wire.
     packet = Packet(device_id="sensor_1", device_type=DeviceType.TEMPERATURE_SENSOR)
     encoded = packet.encode()
     decoded = Packet.decode(encoded)
@@ -23,6 +25,7 @@ def test_sensor_update():
 
 
 def test_read_routing():
+    # Read a seeded temperature through the server's request handler.
     server = IntermediateServer()
     node = SensorActuatorNode("temp_01", DeviceType.TEMPERATURE_SENSOR)
     node.update_sensor("temperature", 19.8)
@@ -42,6 +45,7 @@ def test_read_routing():
 
 
 def test_write_routing():
+    # Check both the write response and the actuator's stored state.
     server = IntermediateServer()
     node = SensorActuatorNode("irr_01", DeviceType.IRRIGATOR)
     server.register_node(node)
@@ -79,6 +83,7 @@ def test_list_nodes_routing():
 
 
 def test_sensor_update_routing():
+    # Verify that the reply and the simulated sensor agree on the new reading.
     server = IntermediateServer()
     node = SensorActuatorNode("temp_01", DeviceType.TEMPERATURE_SENSOR)
     server.register_node(node)
