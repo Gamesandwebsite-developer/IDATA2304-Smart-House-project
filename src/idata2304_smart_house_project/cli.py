@@ -7,9 +7,9 @@
 
 import asyncio     # runs the asynchronous server
 
-from .api import Packet
-from .client import AsyncNetworkClient
-from .control_panel import ControlPanel
+from idata2304_smart_house_project.api import Packet
+from idata2304_smart_house_project.client import AsyncNetworkClient
+from idata2304_smart_house_project.control_panel import ControlPanel
 
 
 def print_menu() -> None:

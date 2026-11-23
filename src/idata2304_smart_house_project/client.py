@@ -142,7 +142,8 @@ async def read_and_display_sensor(
 
     # Only check numeric sensor readings for anomalies.
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        warning = panel.check_sensor_anomaly(sensor, value)
+        # warning = panel.check_sensor_anomaly(sensor, value)
+        warning = "" #TODO fix this
 
         if warning:
             print(warning)
