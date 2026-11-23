@@ -1,0 +1,156 @@
+{
+  "UNKNOWN_SENSOR": {
+    "id": 0,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      -100,
+      150
+    ]
+  },
+  "TEMPERATURE_SENSOR": {
+    "id": 1,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      -100,
+      150
+    ]
+  },
+  
+  "LIGHT_SENSOR": {
+    "id": 2,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      0,
+      100000
+    ]
+  },
+  "HUMIDITY_SENSOR": {
+    "id": 3,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      0,
+      100
+    ]
+  },
+  "MOTION_SENSOR": {
+    "id": 4,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      0,
+      1
+    ]
+  },
+  "SMOKE_FLAME_DETECTOR": {
+    "id": 5,
+    "supported_commands": [
+      "READ"
+    ],
+    "value_type": "float",
+    "value_range": [
+      0,
+      1
+    ]
+  },
+  "UNKNOWN_ACTUATOR": {
+    "id": 256,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "string",
+    "allowed_values": [
+      "ON",
+      "OFF"
+    ]
+  },
+  "IRRIGATOR": {
+    "id": 257,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "string",
+    "allowed_values": [
+      "ON",
+      "OFF"
+    ]
+  },
+  "FAN": {
+    "id": 258,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "string",
+    "allowed_values": [
+      "ON",
+      "OFF"
+    ]
+  },
+  "HEATER": {
+    "id": 259,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "string",
+    "allowed_values": [
+      "ON",
+      "OFF"
+    ]
+  },
+  "DOOR_LOCK": {
+    "id": 260,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "string",
+    "allowed_values": [
+      "LOCKED",
+      "UNLOCKED"
+    ]
+  },
+  "THERMOSTAT_ACTUATOR": {
+    "id": 261,
+    "supported_commands": [
+      "READ",
+      "WRITE"
+    ],
+    "value_type": "float",
+    "value_range": [
+      -100,
+      150
+    ]
+  },
+  "CONTROL_PANEL": {
+    "id": 512,
+    "supported_commands": [],
+    "value_type": "none"
+  },
+  "PHONE": {
+    "id": 513,
+    "supported_commands": [],
+    "value_type": "none"
+  },
+  "SERVER": {
+    "id": 514,
+    "supported_commands": [],
+    "value_type": "none"
+  }
+}
