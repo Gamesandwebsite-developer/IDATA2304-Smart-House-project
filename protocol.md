@@ -127,7 +127,7 @@ Example request:
   "device_type": 512,
   "timestamp": 1760000000,
   "payload": {
-    "action": "READ",
+    "command": "READ",
     "target_id": "temp_node_01",
     "resource": "temperature"
   }
