@@ -1,0 +1,10 @@
+{
+  "temperature": {
+    "min": 5,
+    "max": 30
+  },
+  "humidity": {
+    "min": 30,
+    "max": 70
+  }
+}
