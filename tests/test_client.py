@@ -1,9 +1,10 @@
-# Test network client construction and failed connection handling.
+# Test network client construction and failed connection handling
 import pytest
 
 from idata2304_smart_house_project.client import AsyncNetworkClient
 
 
+# Verify client connection error handling
 @pytest.mark.asyncio
 async def test_client_connection_error_handling():
     """Check that the client handles a failed server connection."""
@@ -17,6 +18,7 @@ async def test_client_connection_error_handling():
         await client.connect()
 
 
+# Verify client initialization
 def test_client_initialization():
     """Check that client settings are initialized correctly."""
 

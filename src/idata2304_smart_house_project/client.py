@@ -1,38 +1,43 @@
 import asyncio
 import struct
 from typing import Optional
-from idata2304_smart_house_project.api import Packet
+from .anomaly_detector import AnomalyDetector
+from idata2304_smart_house_project.api import MAX_MESSAGE_SIZE, TIMEOUT, Packet
 from idata2304_smart_house_project.control_panel import ControlPanel
 
-# The network client handles TCP framing. The control panel builds requests
-# for the terminal menu, which decodes the server's responses through send_request().
-MAX_MESSAGE_SIZE = 1024 * 1024  # 1 MB
-TIMEOUT = 10  # Seconds
-
-
+# The network client handles TCP framing The control panel builds requests
+# for the terminal menu which decodes the server s responses through send_request
 class AsyncNetworkClient:
     """Manage TCP communication with the Smart Home server."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8081) -> None:
+    # Initialize the object and prepare it for use
+    def __init__(
+        self, host: str = "127.0.0.1", port: int = 8081, quiet: bool = False
+    ) -> None:
         self.host = host
         self.port = port
-        # Connecting sets these streams. Disconnecting clears them.
+        self.quiet = quiet
+        # Connecting sets these streams Disconnecting clears them
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
 
+    # Perform connect
     async def connect(self) -> None:
         """Connect to the server and handle connection errors."""
 
+        # Run the operation and handle possible errors
         try:
             self.reader, self.writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port), timeout=TIMEOUT
             )
 
-            print(f"[CLIENT] Connected to server " f"at {self.host}:{self.port}")
+            if not self.quiet:
+                print(f"[CLIENT] Connected to server at {self.host}:{self.port}")
 
         except (OSError, asyncio.TimeoutError) as error:
             raise ConnectionError(f"Could not connect to server: {error}") from error
 
+    # Send packet
     async def send_packet(self, data: bytes) -> bytes:
         """Send a packet and receive the server response."""
 
@@ -42,30 +47,31 @@ class AsyncNetworkClient:
         if not 0 < len(data) <= MAX_MESSAGE_SIZE:
             raise ValueError("Invalid message size")
 
+        # Run the operation and handle possible errors
         try:
-            # TCP delivers a byte stream, so prefix each packet with its size.
-            # The server expects a four-byte unsigned integer in network byte order.
+            # TCP delivers a byte stream so prefix each packet with its size
+            # The server expects a four byte unsigned integer in network byte order
             length_prefix = struct.pack("!I", len(data))
             self.writer.write(length_prefix + data)
 
-            # Pause if the transport needs time to clear its write buffer.
+            # Pause if the transport needs time to clear its write buffer
             await asyncio.wait_for(self.writer.drain(), timeout=TIMEOUT)
 
-            # Read and validate the server's length prefix before reading the body.
+            # Read and validate the server s length prefix before reading the body
             header = await asyncio.wait_for(self.reader.readexactly(4), timeout=TIMEOUT)
 
             msg_length = struct.unpack("!I", header)[0]
 
             if not 0 < msg_length <= MAX_MESSAGE_SIZE:
-                raise ValueError("Invalid response size")
+                raise ConnectionError("Invalid response size")
 
-            # The body can arrive in several chunks, so wait for every byte.
+            # The body can arrive in several chunks so wait for every byte
             return await asyncio.wait_for(
                 self.reader.readexactly(msg_length), timeout=TIMEOUT
             )
 
         except asyncio.IncompleteReadError as error:
-            # The peer closed the stream before the full header or body arrived.
+            # The peer closed the stream before the full header or body arrived
             raise ConnectionError("Server disconnected unexpectedly") from error
 
         except (OSError, asyncio.TimeoutError) as error:
@@ -73,29 +79,34 @@ class AsyncNetworkClient:
                 f"Communication with server failed: {error}"
             ) from error
 
+    # Perform disconnect
     async def disconnect(self) -> None:
         """Close the connection safely."""
 
+        # Check the condition and choose the matching result
         if self.writer is not None:
             self.writer.close()
 
+            # Run the operation and handle possible errors
             try:
                 await self.writer.wait_closed()
             except OSError:
-                # Clear the local stream references even if closing the socket fails.
+                # Clear the local stream references even if closing the socket fails
                 pass
 
             self.reader = None
             self.writer = None
 
-            print("[CLIENT] Disconnected from server.")
+            if not self.quiet:
+                print("[CLIENT] Disconnected from server.")
 
 
+# Send request
 async def send_request(client: AsyncNetworkClient, request: bytes) -> dict:
     """Send an encoded request and return its response payload."""
 
     response = await client.send_packet(request)
-    # Decode the application packet after the network client reads the frame.
+    # Decode the application packet after the network client reads the frame
     packet = Packet.decode(response)
 
     if not isinstance(packet.payload, dict):
@@ -104,6 +115,7 @@ async def send_request(client: AsyncNetworkClient, request: bytes) -> dict:
     return packet.payload
 
 
+# Read and display sensor
 async def read_and_display_sensor(
     client: AsyncNetworkClient, panel: ControlPanel, node_id: str, sensor: str
 ) -> None:
@@ -112,6 +124,7 @@ async def read_and_display_sensor(
     request = panel.create_read_request(node_id, sensor)
     payload = await send_request(client, request)
 
+    # Check the condition and choose the matching result
     if payload.get("status") != "success":
         print("[ERROR]", payload.get("message", "Read failed"))
         return
@@ -122,12 +135,11 @@ async def read_and_display_sensor(
     print(f"Sensor: {sensor}")
     print(f"Value: {value}")
 
-    # Python treats bool as a subclass of int, so exclude on/off readings explicitly.
+    # Python treats bool as a subclass of int so exclude on off readings explicitly
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        # Anomaly detection is currently disabled, so numeric readings show as normal.
-        # warning = panel.check_sensor_anomaly(sensor, value)
-        warning = ""  # TODO fix this
+        warning = AnomalyDetector().check(sensor, value)
 
+        # Check the condition and choose the matching result
         if warning:
             print(warning)
         else:
@@ -136,24 +148,28 @@ async def read_and_display_sensor(
         print("Anomaly detection not applicable")
 
 
+# Perform list nodes
 async def list_nodes(client: AsyncNetworkClient, panel: ControlPanel) -> None:
     """Display registered sensor-actuator nodes."""
 
     request = panel.create_list_nodes_request()
     payload = await send_request(client, request)
 
+    # Check the condition and choose the matching result
     if payload.get("status") != "success":
         print("[ERROR]", payload.get("message", "Request failed"))
         return
 
     nodes = payload.get("nodes", {})
 
+    # Check the condition and choose the matching result
     if not nodes:
         print("No nodes registered")
         return
 
     print("\n===== REGISTERED NODES =====")
 
+    # Process each item in the collection
     for node_id, information in nodes.items():
         print(f"\nNode: {node_id}")
         print(f"Type: {information.get('device_type')}")
@@ -161,6 +177,7 @@ async def list_nodes(client: AsyncNetworkClient, panel: ControlPanel) -> None:
         print(f"Actuators: {information.get('actuators')}")
 
 
+# Write actuator
 async def write_actuator(
     client: AsyncNetworkClient,
     panel: ControlPanel,
@@ -174,75 +191,21 @@ async def write_actuator(
 
     payload = await send_request(client, request)
 
+    # Check the condition and choose the matching result
     if payload.get("status") != "success":
         print("[ERROR]", payload.get("message", "Write failed"))
         return
 
-    # Show the state confirmed by the server.
+    # Show the state confirmed by the server
     print(f"Actuator '{actuator}' updated to " f"{payload.get('new_state')}")
 
 
+# Start the application
 async def main() -> None:
-    """Run the Smart Home terminal control panel."""
+    from .cli import run as run_control_panel
 
-    client = AsyncNetworkClient()
-    panel = ControlPanel("admin_user", "admin")
-
-    try:
-        await client.connect()
-
-        # Handle one request at a time over the same TCP connection.
-        while True:
-            print("\n===== SMART HOME CONTROL PANEL =====")
-            print("1. List nodes")
-            print("2. Read sensor")
-            print("3. Control actuator")
-            print("4. Quit")
-
-            # Run blocking terminal prompts in a worker thread to keep the event loop free.
-            choice = (await asyncio.to_thread(input, "Choose option: ")).strip()
-
-            if choice == "4":
-                break
-
-            try:
-                if choice == "1":
-                    await list_nodes(client, panel)
-
-                elif choice == "2":
-                    node_id = (await asyncio.to_thread(input, "Node ID: ")).strip()
-
-                    sensor = (await asyncio.to_thread(input, "Sensor: ")).strip()
-
-                    await read_and_display_sensor(client, panel, node_id, sensor)
-
-                elif choice == "3":
-                    node_id = (await asyncio.to_thread(input, "Node ID: ")).strip()
-
-                    actuator = (await asyncio.to_thread(input, "Actuator: ")).strip()
-
-                    state = (await asyncio.to_thread(input, "New state: ")).strip()
-
-                    await write_actuator(client, panel, node_id, actuator, state)
-
-                else:
-                    print("Invalid option")
-
-            except (ConnectionError, OSError, ValueError) as error:
-                print(f"[ERROR] {error}")
-
-                # A broken TCP connection cannot be reused.
-                if isinstance(error, ConnectionError):
-                    break
-
-    except (ConnectionError, OSError) as error:
-        print(f"[ERROR] {error}")
-
-    finally:
-        # Close the connection even if an error interrupts the menu.
-        await client.disconnect()
+    await run_control_panel()
 
 
 if __name__ == "__main__":
-    # Importers such as cli.py can bring in the client without starting this menu.
     asyncio.run(main())

@@ -10,8 +10,10 @@ authors = [
 requires-python = ">=3.14"
 dependencies = []
 
-# Register the server command for uv run and installed environments.
+# Register commands for uv run and installed environments.
 [project.scripts]
+server = "idata2304_smart_house_project:main"
+client = "idata2304_smart_house_project.cli:main"
 idata2304-smart-house-project = "idata2304_smart_house_project:main"
 
 # Use uv's build backend to package the src-layout project.

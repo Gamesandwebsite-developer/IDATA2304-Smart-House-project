@@ -1,15 +1,4 @@
 {
-  "UNKNOWN_SENSOR": {
-    "id": 0,
-    "supported_commands": [
-      "READ"
-    ],
-    "value_type": "float",
-    "value_range": [
-      -100,
-      150
-    ]
-  },
   "TEMPERATURE_SENSOR": {
     "id": 1,
     "supported_commands": [
@@ -150,6 +139,11 @@
   },
   "SERVER": {
     "id": 514,
+    "supported_commands": [],
+    "value_type": "none"
+  },
+  "SIMULATED_NODE": {
+    "id": 515,
     "supported_commands": [],
     "value_type": "none"
   }

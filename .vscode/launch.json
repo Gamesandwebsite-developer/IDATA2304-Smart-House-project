@@ -1,0 +1,42 @@
+{ //genereated by AI to help with launching the server and client with one F5
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Smart House: Server + Client",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "idata2304_smart_house_project",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "windows": {
+                "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "redirectOutput": true,
+            "preLaunchTask": "Smart House: Sync environment",
+            "serverReadyAction": {
+                "pattern": "\\[SERVER\\] Listening on 127\\.0\\.0\\.1:(8081)",
+                "action": "startDebugging",
+                "name": "Smart House: Client",
+                "killOnServerStop": true
+            }
+        },
+        {
+            "name": "Smart House: Client",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "idata2304_smart_house_project.cli",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "windows": {
+                "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+            "presentation": {
+                "hidden": true
+            }
+        }
+    ]
+}

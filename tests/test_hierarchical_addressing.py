@@ -1,4 +1,4 @@
-# Exercise full component addresses through the control panel and server.
+# Exercise full component addresses through the control panel and server
 import pytest
 
 from idata2304_smart_house_project.api import DeviceType, Packet
@@ -7,6 +7,7 @@ from idata2304_smart_house_project.sensor_node import SensorActuatorNode
 from idata2304_smart_house_project.server import IntermediateServer
 
 
+# Create home
 def make_home():
     """Create a simulated home for the tests."""
 
@@ -17,7 +18,7 @@ def make_home():
         DeviceType.TEMPERATURE_SENSOR
     )
 
-    # Two actuators are used to test individual targeting.
+    # Two actuators are used to test individual targeting
     node.add_actuator(
         "light_actuator_1",
         DeviceType.FAN,
@@ -35,6 +36,7 @@ def make_home():
     return server, node, panel
 
 
+# Perform reply
 def reply(server, message):
     """Send a request and decode the server response."""
 
@@ -46,6 +48,7 @@ def reply(server, message):
     return result
 
 
+# Verify addressed read
 def test_addressed_read():
     """Check that a sensor can be read using its full address."""
 
@@ -62,6 +65,7 @@ def test_addressed_read():
     assert result["value"] == 20.0
 
 
+# Verify addressed write targets one actuator
 def test_addressed_write_targets_one_actuator():
     """Changing one actuator must not change another."""
 
@@ -80,6 +84,7 @@ def test_addressed_write_targets_one_actuator():
     assert node.actuators["light_actuator_2"] == "OFF"
 
 
+# Verify unknown address is rejected
 def test_unknown_address_is_rejected():
     """Invalid or unknown addresses are rejected."""
 
@@ -95,6 +100,7 @@ def test_unknown_address_is_rejected():
 
     assert result["status"] == "error"
 
+    # Use the context for the duration of the operation
     with pytest.raises(ValueError):
         panel.create_addressed_read_request(
             "living_room/light_actuator_1"

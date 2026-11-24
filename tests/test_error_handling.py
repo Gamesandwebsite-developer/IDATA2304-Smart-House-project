@@ -3,8 +3,9 @@ from idata2304_smart_house_project.api import DeviceType, Packet
 from idata2304_smart_house_project.server import IntermediateServer
 
 
+# Verify invalid json
 def test_invalid_json():
-    # Malformed bytes should produce an encoded error response.
+    # Malformed bytes should produce an encoded error response
     server = IntermediateServer()
 
     response = Packet.decode(
@@ -15,8 +16,9 @@ def test_invalid_json():
     assert response.payload["status"] == "error"
 
 
+# Verify missing command
 def test_missing_command():
-    # A valid JSON envelope still needs a command in its payload.
+    # A valid JSON envelope still needs a command in its payload
     server = IntermediateServer()
 
     request = Packet(

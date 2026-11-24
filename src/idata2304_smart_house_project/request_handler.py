@@ -1,218 +1,173 @@
+from collections.abc import Callable
 
-from typing import Any, Dict
-
+from .access_control import AccessControlManager
 from .api import Command, DeviceType, Packet, split_address
 from .sensor_node import SensorActuatorNode
-from .access_control import AccessControlManager
 
 
+# Manage request handler
 class RequestHandler:
-    """Validate and route requests to simulated sensor nodes."""
+    """Validate requests and run commands on local simulated nodes."""
 
-    def __init__(
-        self,
-        nodes: Dict[str, SensorActuatorNode]
-    ) -> None:
-        # Keep the server's registry by reference so new registrations are visible here.
+    # Initialize the object and prepare it for use
+    def __init__(self, nodes: dict[str, SensorActuatorNode]) -> None:
         self.nodes = nodes
 
+    # Handle the incoming request
     def handle(self, raw_bytes: bytes) -> bytes:
-        """Decode a request and return an encoded response."""
+        nodes_info = {node_id: node.describe() for node_id, node in self.nodes.items()}
+        request = self.prepare(raw_bytes, nodes_info)
+        if isinstance(request, bytes):
+            return request
+        if request["command"] == Command.REGISTER_NODE:
+            return self.error_response("Registration requires a central server connection")
+        return self.execute(request)
 
+    # Validate and prepare the incoming request
+    def prepare(
+        self,
+        raw_bytes: bytes,
+        nodes_info: dict,
+        authenticate: Callable[[Packet], str] | None = None,
+    ) -> dict | bytes:
+        """Check the request and resolve a command's target before routing it."""
+        # Run the operation and handle possible errors
         try:
             packet = Packet.decode(raw_bytes)
-        except (ValueError, TypeError, KeyError, UnicodeDecodeError):
-            return self._error_response("Invalid packet format")
+        except (ValueError, TypeError, KeyError, RecursionError):
+            return self.error_response("Invalid packet format")
 
         if not isinstance(packet.payload, dict):
-            return self._error_response("Missing or invalid payload")
-
+            return self.error_response("Missing or invalid payload")
         payload = packet.payload
         command = payload.get("command")
-
         if not isinstance(command, str) or not command:
-            return self._error_response("Missing or invalid command")
+            return self.error_response("Missing or invalid command")
+        if command not in Command:
+            return self.error_response(f"Unknown command '{command}'")
 
-        target_id = payload.get("target_node_id")
-        component = None
+        # Run the operation and handle possible errors
+        try:
+            role = authenticate(packet) if authenticate else payload.get("access_level", "guest")
+        except ValueError as error:
+            return self.error_response(str(error))
+        if not isinstance(role, str):
+            return self.error_response("Invalid access level")
 
-        # A full address supplies both the registry key and the component name.
-        if "address" in payload:
-            if command not in (
-                Command.READ,
-                Command.WRITE,
-                Command.UPDATE_SENSOR
-            ):
-                return self._error_response(
-                    "Address not allowed for this command"
-                )
-
-            try:
-                target_id, component = split_address(
-                    payload["address"]
-                )
-            except ValueError as error:
-                return self._error_response(str(error))
-
-        # Check the role before reading or changing any node state.
-        access_level = payload.get("access_level", "guest")
-
-        if not isinstance(access_level, str):
-            return self._error_response("Invalid access level")
-
-        # Use the resolved actuator name for permission checks on addressed writes.
-        actuator = (
-            component
-            if command == Command.WRITE and component
-            else payload.get("actuator", "")
-        )
-
-        if not isinstance(actuator, str):
-            return self._error_response("Invalid actuator name")
-
-        if not AccessControlManager.is_authorized(
-            access_level, command, actuator
-        ):
-            return self._error_response(
-                f"Access denied: role '{access_level}' "
-                f"cannot perform '{command}' on '{actuator}'."
-            )
-
-        # LIST_NODES: Return registered nodes.
-        if command == Command.LIST_NODES:
-            nodes_info = {
-                node_id: {
-                    "device_type": node.device_type.name,
-                    "sensors": list(node.sensors.keys()),
-                    "actuators": list(node.actuators.keys()),
-                }
-                for node_id, node in self.nodes.items()
+        # Check the condition and choose the matching result
+        if command in (Command.LIST_NODES, Command.REGISTER_NODE):
+            if "address" in payload:
+                return self.error_response("Address not allowed for this command")
+            if not AccessControlManager.is_authorized(role, command):
+                return self.error_response("Access denied")
+            if command == Command.LIST_NODES:
+                return self.success_response({"nodes": nodes_info})
+            return {
+                "command": command,
+                "node_id": payload.get("node_id"),
+                "components": payload.get("components"),
             }
 
-            return self._success_response({
-                "status": "success",
-                "nodes": nodes_info
-            })
+        field = {
+            Command.READ: "resource",
+            Command.WRITE: "actuator",
+            Command.UPDATE_SENSOR: "sensor",
+        }[command]
+        target_id = payload.get("target_node_id")
+        component = payload.get(field)
+        # Check the condition and choose the matching result
+        if "address" in payload:
+            # Run the operation and handle possible errors
+            try:
+                target_id, component = split_address(payload["address"])
+            except ValueError as error:
+                return self.error_response(str(error))
 
-        # Other commands require a valid node.
-        if not isinstance(target_id, str):
-            return self._error_response(
-                "Missing or invalid target node ID"
+        if not isinstance(target_id, str) or not target_id:
+            return self.error_response("Missing or invalid target node ID")
+        if not isinstance(component, str) or not component:
+            return self.error_response(f"Invalid {field} name")
+        if target_id not in nodes_info:
+            return self.error_response(f"Target node '{target_id}' not found")
+
+        actuator_type = nodes_info[target_id]["actuator_types"].get(component)
+        # Check the condition and choose the matching result
+        if not AccessControlManager.is_authorized(role, command, component, actuator_type):
+            return self.error_response(
+                f"Access denied: role '{role}' cannot perform '{command}' on '{component}'."
             )
 
-        if target_id not in self.nodes:
-            return self._error_response(
-                f"Target node '{target_id}' not found"
-            )
+        request = {"command": command, "target_node_id": target_id, field: component}
+        # Check the condition and choose the matching result
+        if command == Command.WRITE:
+            state = payload.get("state")
+            if type(state) not in (int, float, str):
+                return self.error_response(f"Invalid actuator or value for '{component}'")
+            request["state"] = state
+        # Check the condition and choose the matching result
+        elif command == Command.UPDATE_SENSOR:
+            value = payload.get("value")
+            if type(value) not in (int, float):
+                return self.error_response(f"Invalid sensor or value for '{component}'")
+            request["value"] = value
+        return request
 
+    # Execute the prepared request
+    def execute(self, request: dict) -> bytes:
+        """Apply a validated command to the local node."""
+        target_id = request["target_node_id"]
         node = self.nodes[target_id]
 
-        # READ: Get a sensor reading or actuator state.
-        if command == Command.READ:
-            resource = (
-                component
-                if component is not None
-                else payload.get("resource", "")
-            )
-
-            if not isinstance(resource, str):
-                return self._error_response("Invalid resource name")
-
+        # Check the condition and choose the matching result
+        if request["command"] == Command.READ:
+            resource = request["resource"]
+            # Check the condition and choose the matching result
             if resource in node.sensors:
                 value = node.sensors[resource]
+            # Check the condition and choose the matching result
             elif resource in node.actuators:
                 value = node.actuators[resource]
             else:
-                return self._error_response(
-                    f"Unknown resource '{resource}'"
-                )
-
-            return self._success_response(
-                {
-                    "status": "success",
-                    "resource": resource,
-                    "value": value
-                },
-                device_type=node.device_type
+                return self.error_response(f"Unknown resource '{resource}'")
+            return self.success_response(
+                {"resource": resource, "value": value}, node.device_type
             )
 
-        # WRITE: Change an actuator state.
-        elif command == Command.WRITE:
-            actuator = (
-                component
-                if component is not None
-                else payload.get("actuator", "")
+        # Check the condition and choose the matching result
+        if request["command"] == Command.WRITE:
+            actuator = request["actuator"]
+            if not node.execute_command(actuator, request["state"]):
+                return self.error_response(f"Invalid actuator or value for '{actuator}'")
+            return self.success_response(
+                {"actuator": actuator, "new_state": node.actuators[actuator]},
+                node.device_type,
             )
 
-            if not isinstance(actuator, str):
-                return self._error_response("Invalid actuator name")
+        sensor = request["sensor"]
+        if not node.update_sensor(sensor, request["value"]):
+            return self.error_response(f"Invalid sensor or value for '{sensor}'")
+        return self.success_response({
+            "target_id": target_id,
+            "sensor": sensor,
+            "new_value": node.sensors[sensor],
+        })
 
-            state = payload.get("state")
-
-            if not node.execute_command(actuator, state):
-                return self._error_response(
-                    f"Invalid actuator or value for '{actuator}'"
-                )
-
-            return self._success_response(
-                {
-                    "status": "success",
-                    "actuator": actuator,
-                    "new_state": node.actuators.get(actuator)
-                },
-                device_type=node.device_type
-            )
-
-        # UPDATE_SENSOR: Update a simulated sensor reading.
-        elif command == Command.UPDATE_SENSOR:
-            sensor = (
-                component
-                if component is not None
-                else payload.get("sensor", "")
-            )
-
-            if not isinstance(sensor, str):
-                return self._error_response("Invalid sensor name")
-
-            value = payload.get("value")
-
-            if not node.update_sensor(sensor, value):
-                return self._error_response(
-                    f"Invalid sensor or value for '{sensor}'"
-                )
-
-            return self._success_response({
-                "status": "success",
-                "target_id": target_id,
-                "sensor": sensor,
-                "new_value": node.sensors.get(sensor)
-            })
-
-        return self._error_response(
-            f"Unknown command '{command}'"
-        )
-
-    def _error_response(self, message: str) -> bytes:
-        """Create an error response packet."""
-
+    # Perform error response
+    @staticmethod
+    def error_response(message: str) -> bytes:
         return Packet(
             device_id="server",
             device_type=DeviceType.SERVER,
-            payload={
-                "status": "error",
-                "message": message
-            }
+            payload={"status": "error", "message": message},
         ).encode()
 
-    def _success_response(
-        self,
-        payload: dict[str, Any],
-        device_type: DeviceType = DeviceType.SERVER
+    # Perform success response
+    @staticmethod
+    def success_response(
+        payload: dict, device_type: DeviceType = DeviceType.SERVER
     ) -> bytes:
-        """Create a successful response packet."""
-
         return Packet(
             device_id="server",
             device_type=device_type,
-            payload=payload
+            payload={"status": "success", **payload},
         ).encode()

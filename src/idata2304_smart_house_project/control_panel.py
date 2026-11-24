@@ -2,9 +2,11 @@ from typing import Any
 from .api import Command, DeviceType, Packet
 
 
+# Manage control panel
 class ControlPanel:
     """Build protocol requests; network transport is handled by the client."""
 
+    # Initialize the object and prepare it for use
     def __init__(
         self,
         user_id: str,
@@ -12,11 +14,12 @@ class ControlPanel:
         device_type: DeviceType = DeviceType.CONTROL_PANEL,
     ) -> None:
 
-        # Identity and access level are included in every request.
+        # Identity and access level are included in every request
         self.user_id = user_id
         self.access_level = access_level
         self.device_type = DeviceType(device_type)
 
+    # Create a read request
     def create_read_request(
         self, target_node_id: str, resource: str
     ) -> bytes:
@@ -35,12 +38,13 @@ class ControlPanel:
 
         return packet.encode()
 
+    # Create a write request
     def create_write_request(
         self, target_node_id: str, actuator: str, state: Any
     ) -> bytes:
         """Request an actuator state change."""
 
-        # Preserve the original state type because thermostats require numeric values.
+        # Preserve the original state type because thermostats require numeric values
         packet = Packet(
             device_id=self.user_id,
             device_type=self.device_type,
@@ -55,6 +59,7 @@ class ControlPanel:
 
         return packet.encode()
 
+    # Create a list nodes request
     def create_list_nodes_request(self) -> bytes:
         """Request the server's registered nodes."""
 
@@ -69,6 +74,7 @@ class ControlPanel:
 
         return packet.encode()
 
+    # Create a sensor update request
     def create_sensor_update_request(
         self, target_node_id: str, sensor: str, value: float
     ) -> bytes:
@@ -88,12 +94,26 @@ class ControlPanel:
 
         return packet.encode()
 
+    # Create a register node request
+    def create_register_node_request(self, node_id: str, components: list[dict]) -> bytes:
+        return Packet(
+            device_id=self.user_id,
+            device_type=self.device_type,
+            payload={
+                "command": Command.REGISTER_NODE,
+                "node_id": node_id,
+                "components": components,
+                "access_level": self.access_level,
+            },
+        ).encode()
+
+    # Create a addressed read request
     def create_addressed_read_request(self, address: str) -> bytes:
         """READ one component using its full hierarchical address."""
 
         from .api import split_address
 
-        # Validate locally while leaving target resolution to the server.
+        # Validate locally while leaving target resolution to the server
         split_address(address)
 
         return Packet(
@@ -106,6 +126,7 @@ class ControlPanel:
             },
         ).encode()
 
+    # Create a addressed write request
     def create_addressed_write_request(
         self, address: str, state: Any
     ) -> bytes:
@@ -113,7 +134,7 @@ class ControlPanel:
 
         from .api import split_address
 
-        # Validate the hierarchical address.
+        # Validate the hierarchical address
         split_address(address)
 
         return Packet(

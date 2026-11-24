@@ -1,30 +1,29 @@
 import asyncio
-import logging
-from idata2304_smart_house_project.server import IntermediateServer
-from idata2304_smart_house_project.sensor_node import SensorActuatorNode
-from idata2304_smart_house_project.api import DeviceType
 
-logging.basicConfig(level=logging.INFO)
+from .SimulationBuilder import create_nodes
+from .server import IntermediateServer
 
 
-async def run() -> None:
-    # Set up the default house and run its TCP server.
-    server = IntermediateServer(host="127.0.0.1", port=8081)
+# Run the application process
+async def run(host: str = "127.0.0.1", port: int = 8081) -> None:
+    server = IntermediateServer(host, port)
+    # Run the operation and handle possible errors
+    try:
+        for node in create_nodes().values():
+            await server.add_simulated_node(node)
 
-    # Seed the server with simulated nodes before it starts accepting connections.
-    server.register_node(
-        SensorActuatorNode("temp_node_1", DeviceType.TEMPERATURE_SENSOR)
-    )
-    server.register_node(SensorActuatorNode("door_lock_1", DeviceType.DOOR_LOCK))
-
-    print("Starting Smart House Server on 127.0.0.1:8081...")
-    await server.start()
+        await server.start()
+    finally:
+        await server.stop()
 
 
-def main():
-    # Start the event loop and report a clean shutdown on Ctrl+C.
+# Start the application
+def main() -> None:
+    # Run the operation and handle possible errors
     try:
         asyncio.run(run())
+    except OSError as error:
+        raise SystemExit(f"Could not start Smart House server: {error}") from error
     except KeyboardInterrupt:
         print("\nServer shut down.")
 

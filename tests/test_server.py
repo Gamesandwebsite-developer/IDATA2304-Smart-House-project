@@ -1,8 +1,9 @@
 from idata2304_smart_house_project.api import Packet, DeviceType, Command
 from idata2304_smart_house_project.server import IntermediateServer
 
+# Verify server route message
 def test_server_route_message():
-    # The routing layer can be exercised directly without opening a TCP connection.
+    # The routing layer can be exercised directly without opening a TCP connection
     # Create server
     server = IntermediateServer()
 

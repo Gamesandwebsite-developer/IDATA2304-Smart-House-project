@@ -27,11 +27,20 @@
    - Choose the Python version inside `.venv`.
    - Now you can run things normally via VSCode (F5/ Ctrl F5/ Run tests) without even a python installation on your PC
 
-4. And you can also run the project from the terminal.
+4. Run the project from VSCode
+   - Press F5 to run the Server + Client in separate terminal windows automatically
+   - If the above does not work, go to Run and debug and select "Smart House: Server + Client" and click Start.
 
-   - Run the app:
+5. Run the project from the terminal.
+
+   - Run the server:
      ```bash
-     uv run idata2304-smart-house-project
+     uv run server
+     ```
+
+  - Run the client:
+     ```bash
+     uv run client
      ```
 
    - Run tests:

@@ -1,9 +1,16 @@
-# Expose the public classes and entry point at the package level.
+# Expose the public classes and entry point at the package level
 from .api import DeviceType, Packet
 from .sensor_node import SensorActuatorNode
 from .control_panel import ControlPanel
 from .server import IntermediateServer
-from .__main__ import main
+
+
+# Start the application
+def main() -> None:
+    from .__main__ import main as run_server
+
+    run_server()
+
 
 __all__ = [
     "DeviceType",
