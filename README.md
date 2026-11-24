@@ -1,5 +1,9 @@
 # IDATA2304 Smart House Project
 
+LlamaMilkshake = Mandal Julianne Leiseth (10018)
+Gamesandwebsite-developer = Tang Shirley (10019)
+jiaqi-utwente/jiaqi-ntnu = Zhao Jiaqi (10017)
+
 ## Initial setup
 
 1. Install UV.
